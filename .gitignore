@@ -1,0 +1,6 @@
+Makefile
+build/
+docs/
+*.mk
+*.projbuild
+sdkconfig
