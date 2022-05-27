@@ -37,6 +37,33 @@
 
 #define BUF_SIZE (1024)
 
+esp_err_t hdq_read(uint8_t cmd, uint8_t * reply){
+    const uint8_t hi = 0xFE;
+    const uint8_t lo = 0xC0;
+    uint8_t buf[20];
+    int i = 0;
+    // Flush buffer
+    uart_read_bytes(ECHO_UART_PORT_NUM, buf, 16, 0);
+    for(; i < 8; ++i){
+        buf[i] = cmd&1 ? hi : lo;
+        cmd >>= 1;
+    }
+    uart_write_bytes(ECHO_UART_PORT_NUM, buf, 8);
+    int len = uart_read_bytes(ECHO_UART_PORT_NUM, buf, 16, 10 / portTICK_RATE_MS);
+    uint8_t tmp = 0;
+    for(; i < len; ++i){
+        if(buf[i] > 0xF8)
+            tmp |= 0x80;
+        tmp >>= 1;
+    }
+    *reply = tmp;
+    if(len < 17)
+        return ESP_ERR_NOT_FINISHED;
+    return ESP_OK;
+}
+
+      
+
 static void echo_task(void *arg)
 {
     /* Configure parameters of an UART driver,
@@ -58,20 +85,24 @@ static void echo_task(void *arg)
     ESP_ERROR_CHECK(uart_driver_install(ECHO_UART_PORT_NUM, BUF_SIZE * 2, 0, 0, NULL, intr_alloc_flags));
     ESP_ERROR_CHECK(uart_param_config(ECHO_UART_PORT_NUM, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(ECHO_UART_PORT_NUM, ECHO_TEST_TXD, ECHO_TEST_RXD, ECHO_TEST_RTS, ECHO_TEST_CTS));
-    ESP_ERROR_CHECK(gpio_set_direction(ECHO_TEST_TXD, GPIO_MODE_OUTPUT_OD));
-    ESP_ERROR_CHECK(gpio_pullup_en(ECHO_TEST_RXD));
-
-    // Configure a temporary buffer for the incoming data
-    uint8_t *data = (uint8_t *) malloc(BUF_SIZE);
+    //ESP_ERROR_CHECK(gpio_set_direction(ECHO_TEST_TXD, GPIO_MODE_OUTPUT_OD));
+    //ESP_ERROR_CHECK(gpio_pullup_en(ECHO_TEST_RXD));
 
     while (1) {
         // Write data back to the UART
-        const char * msg = "Testing";
-        uart_write_bytes(ECHO_UART_PORT_NUM, msg, 8);
-        // Read data from the UART
-        int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, BUF_SIZE, 50 / portTICK_RATE_MS);
+        uint8_t cmd, reply;
+        uint16_t volts;
+        cmd = 9;
+        hdq_read(cmd, &reply);
+        volts = reply;
+        volts <<= 8;
+        cmd = 8;
+        hdq_read(cmd, &reply);
+        volts |= reply;
 
-        ESP_LOGI("UART", "%.*s", len, data);
+        ESP_LOGI("Volts", "%dmv", volts);
+        uart_write_bytes_with_break(ECHO_UART_PORT_NUM, &cmd, 1, 10);
+        vTaskDelay(100/portTICK_RATE_MS);
     }
 }
 
