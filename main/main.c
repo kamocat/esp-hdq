@@ -37,29 +37,36 @@
 
 #define BUF_SIZE (1024)
 
-esp_err_t hdq_read(uint8_t cmd, uint8_t * reply){
+uint8_t hdq_read(uint8_t cmd){
     const uint8_t hi = 0xFE;
     const uint8_t lo = 0xC0;
-    uint8_t buf[20];
+    uint8_t buf[32];
     int i = 0;
-    // Flush buffer
-    uart_read_bytes(ECHO_UART_PORT_NUM, buf, 16, 0);
     for(; i < 8; ++i){
         buf[i] = cmd&1 ? hi : lo;
         cmd >>= 1;
     }
     uart_write_bytes(ECHO_UART_PORT_NUM, buf, 8);
-    int len = uart_read_bytes(ECHO_UART_PORT_NUM, buf, 16, 10 / portTICK_RATE_MS);
+    int len = uart_read_bytes(ECHO_UART_PORT_NUM, buf, 32, 1);
     uint8_t tmp = 0;
-    for(; i < len; ++i){
+    for(i = len-8; i < len; ++i){
+        tmp >>= 1;
         if(buf[i] > 0xF8)
             tmp |= 0x80;
-        tmp >>= 1;
     }
-    *reply = tmp;
-    if(len < 17)
-        return ESP_ERR_NOT_FINISHED;
-    return ESP_OK;
+    return tmp;
+}
+
+// Requires 20 bytes in buffer
+void bin16(uint16_t x, char * buf){
+    for(int i = 4; i; --i){
+        for(int j = 4; j; --j){
+            *buf++ = x&0x8000 ? '1' : '0';
+            x <<= 1;
+        }
+        *buf++ = ' ';
+    }
+    *buf++ = 0; // null termination
 }
 
       
@@ -90,18 +97,20 @@ static void echo_task(void *arg)
 
     while (1) {
         // Write data back to the UART
-        uint8_t cmd, reply;
+        uint8_t cmd;
         uint16_t volts;
         cmd = 9;
-        hdq_read(cmd, &reply);
-        volts = reply;
+        volts = hdq_read(cmd);
         volts <<= 8;
         cmd = 8;
-        hdq_read(cmd, &reply);
-        volts |= reply;
+        volts |= hdq_read(cmd);
 
         ESP_LOGI("Volts", "%dmv", volts);
-        uart_write_bytes_with_break(ECHO_UART_PORT_NUM, &cmd, 1, 10);
+        /*
+        char buf[20];
+        bin16(volts, buf);
+        ESP_LOGI("Volts", "%s", buf);
+        */
         vTaskDelay(100/portTICK_RATE_MS);
     }
 }
