@@ -57,6 +57,27 @@ uint8_t hdq_read(uint8_t cmd){
     return tmp;
 }
 
+uint16_t hdq_read16(uint8_t cmd){
+    uint16_t result = hdq_read(cmd + 1);
+    result <<= 8;
+    result |= hdq_read(cmd);
+    return result;
+}
+
+void hdq_reset(void){
+    uint8_t buf = 0xFF;
+    uart_write_bytes_with_break(ECHO_UART_PORT_NUM, &buf, 1, 20);
+    vTaskDelay(1);
+}
+
+uint8_t hdq_name(char * buf){
+    uint8_t len = hdq_read(0x62);
+    for(int i = 0; i < len; ++i){
+        buf[i] = hdq_read(i+0x63);
+    }
+    return len;
+}
+
 // Requires 20 bytes in buffer
 void bin16(uint16_t x, char * buf){
     for(int i = 4; i; --i){
@@ -96,22 +117,18 @@ static void echo_task(void *arg)
     //ESP_ERROR_CHECK(gpio_pullup_en(ECHO_TEST_RXD));
 
     while (1) {
-        // Write data back to the UART
-        uint8_t cmd;
-        uint16_t volts;
-        cmd = 9;
-        volts = hdq_read(cmd);
-        volts <<= 8;
-        cmd = 8;
-        volts |= hdq_read(cmd);
-
-        ESP_LOGI("Volts", "%dmv", volts);
-        /*
-        char buf[20];
-        bin16(volts, buf);
-        ESP_LOGI("Volts", "%s", buf);
-        */
-        vTaskDelay(100/portTICK_RATE_MS);
+        hdq_reset();
+        ESP_LOGI("Charge", "%d%%", hdq_read16(0x2c));
+        ESP_LOGI("Health", "%d%%", hdq_read16(0x2e));
+        ESP_LOGI("Volts", "%dmv", hdq_read16(8));
+        int celcius = (hdq_read16(6) - 2731); // Kelvin to Celcius
+        ESP_LOGI("Temperature", "%d.%d C", celcius/10, celcius%10);
+        ESP_LOGI("Full Charge Capacity", "%d mAh", hdq_read16(0x12));
+        ESP_LOGI("CHarge Remaining", "%d mAh", hdq_read16(0x10));
+        ESP_LOGI("Cycle Count", "%d", hdq_read16(0x2a));
+        ESP_LOGI("Depth of Discharge", "%d", hdq_read16(0x36));
+        ESP_LOGI("Average Current", "%dmA\n\n", hdq_read16(0x14));
+        vTaskDelay(1000/portTICK_RATE_MS);
     }
 }
 
