@@ -26,14 +26,14 @@
  * - Pin assignment: see defines below (See Kconfig)
  */
 
-#define ECHO_TEST_TXD (CONFIG_EXAMPLE_UART_TXD)
-#define ECHO_TEST_RXD (CONFIG_EXAMPLE_UART_RXD)
+#define ECHO_TEST_TXD 17
+#define ECHO_TEST_RXD 16
 #define ECHO_TEST_RTS (UART_PIN_NO_CHANGE)
 #define ECHO_TEST_CTS (UART_PIN_NO_CHANGE)
 
-#define ECHO_UART_PORT_NUM      (CONFIG_EXAMPLE_UART_PORT_NUM)
-#define ECHO_UART_BAUD_RATE     (CONFIG_EXAMPLE_UART_BAUD_RATE)
-#define ECHO_TASK_STACK_SIZE    (CONFIG_EXAMPLE_TASK_STACK_SIZE)
+#define ECHO_UART_PORT_NUM      2
+#define ECHO_UART_BAUD_RATE     57600
+#define ECHO_TASK_STACK_SIZE    4096
 
 #define BUF_SIZE (1024)
 
@@ -120,14 +120,15 @@ static void echo_task(void *arg)
         hdq_reset();
         ESP_LOGI("Charge", "%d%%", hdq_read16(0x2c));
         ESP_LOGI("Health", "%d%%", hdq_read16(0x2e));
-        ESP_LOGI("Volts", "%dmv", hdq_read16(8));
-        int celcius = (hdq_read16(6) - 2731); // Kelvin to Celcius
-        ESP_LOGI("Temperature", "%d.%d C", celcius/10, celcius%10);
+        ESP_LOGI("Voltage", "%dmv", hdq_read16(8));
+        float celcius = (hdq_read16(6) - 2731) * 0.1; // Kelvin to Celcius
+        ESP_LOGI("Temperature", "%.1f C", celcius);
         ESP_LOGI("Full Charge Capacity", "%d mAh", hdq_read16(0x12));
-        ESP_LOGI("CHarge Remaining", "%d mAh", hdq_read16(0x10));
+        ESP_LOGI("Charge Remaining", "%d mAh", hdq_read16(0x10));
         ESP_LOGI("Cycle Count", "%d", hdq_read16(0x2a));
         ESP_LOGI("Depth of Discharge", "%d", hdq_read16(0x36));
-        ESP_LOGI("Average Current", "%dmA\n\n", hdq_read16(0x14));
+        ESP_LOGI("Average Current", "%dmA", hdq_read16(0x14));
+        ESP_LOGI("Stack used", "%d bytes", uxTaskGetStackHighWaterMark(NULL));
         vTaskDelay(1000/portTICK_RATE_MS);
     }
 }
